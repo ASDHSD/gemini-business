@@ -86,12 +86,22 @@ class RegisterService:
         else:
             self.output_dir = Path("./data")
 
-        # 从统一配置模块加载配置
-        self.auth_config = GeminiAuthConfig()
-        self.auth_helper = GeminiAuthHelper(self.auth_config)
+        # 注意：不再在这里缓存 auth_config，改用 property 动态获取最新配置
+        # 这样前端修改邮箱配置后热更新能立即生效
+        pass
 
         # 指定的域名（用于批量注册时指定域名）
         self._specified_domain: Optional[str] = None
+
+    @property
+    def auth_config(self) -> GeminiAuthConfig:
+        """每次访问时动态获取最新配置，支持热更新"""
+        return GeminiAuthConfig()
+
+    @property
+    def auth_helper(self) -> GeminiAuthHelper:
+        """每次访问时动态获取最新配置，支持热更新"""
+        return GeminiAuthHelper(self.auth_config)
     
     @staticmethod
     def _random_str(n: int = 10) -> str:

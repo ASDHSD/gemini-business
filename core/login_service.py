@@ -78,9 +78,19 @@ class LoginService:
         self._polling_task: Optional[asyncio.Task] = None
         self._is_polling = False
 
-        # 从统一配置模块加载配置
-        self.auth_config = GeminiAuthConfig()
-        self.auth_helper = GeminiAuthHelper(self.auth_config)
+        # 注意：不再在这里缓存 auth_config，改用 property 动态获取最新配置
+        # 这样前端修改邮箱配置后热更新能立即生效
+        pass
+
+    @property
+    def auth_config(self) -> GeminiAuthConfig:
+        """每次访问时动态获取最新配置，支持热更新"""
+        return GeminiAuthConfig()
+
+    @property
+    def auth_helper(self) -> GeminiAuthHelper:
+        """每次访问时动态获取最新配置，支持热更新"""
+        return GeminiAuthHelper(self.auth_config)
 
     def _update_account_config(self, email: str, data: dict) -> Optional[dict]:
         """更新账户配置到 accounts.json"""
