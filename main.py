@@ -989,6 +989,165 @@ async def admin_get_current_register_task(request: Request):
         return {"task": None}
     return {"task": task.to_dict()}
 
+# ---------- 账户导入 API ----------
+from fastapi import UploadFile, File
+
+@app.post("/admin/accounts/upload")
+@require_login()
+async def admin_upload_accounts(request: Request, file: UploadFile = File(...)):
+    """
+    上传 JSON 文件批量导入账户
+    支持两种格式：
+    1. 单账户: {"id": "email", "secure_c_ses": "...", ...}
+    2. 多账户: [{"id": "email1", ...}, {"id": "email2", ...}]
+    """
+    global multi_account_mgr
+    
+    try:
+        content = await file.read()
+        data = json.loads(content.decode('utf-8'))
+        
+        # 标准化为数组格式
+        if isinstance(data, dict):
+            data = [data]
+        
+        if not isinstance(data, list):
+            raise HTTPException(400, "无效的 JSON 格式，需要对象或数组")
+        
+        # 验证必需字段
+        required_fields = ["id", "secure_c_ses", "csesidx", "config_id"]
+        for account in data:
+            missing = [f for f in required_fields if not account.get(f)]
+            if missing:
+                raise HTTPException(400, f"账户 {account.get('id', '未知')} 缺少必需字段: {', '.join(missing)}")
+        
+        # 读取现有配置
+        accounts_file = Path(DATA_DIR) / "accounts.json"
+        existing_accounts = []
+        if accounts_file.exists():
+            try:
+                async with aiofiles.open(accounts_file, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    existing_accounts = json.loads(content)
+            except Exception:
+                existing_accounts = []
+        
+        # 合并账户（覆盖已存在的）
+        existing_ids = {acc.get("id") for acc in existing_accounts}
+        updated_count = 0
+        added_count = 0
+        
+        for new_account in data:
+            account_id = new_account.get("id")
+            if account_id in existing_ids:
+                # 更新已存在的账户
+                for i, acc in enumerate(existing_accounts):
+                    if acc.get("id") == account_id:
+                        existing_accounts[i] = new_account
+                        updated_count += 1
+                        break
+            else:
+                # 添加新账户
+                existing_accounts.append(new_account)
+                added_count += 1
+        
+        # 保存配置
+        async with aiofiles.open(accounts_file, 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(existing_accounts, indent=2, ensure_ascii=False))
+        
+        # 重新加载账户管理器
+        multi_account_mgr = load_multi_account_config(
+            http_client, USER_AGENT,
+            ACCOUNT_FAILURE_THRESHOLD, RATE_LIMIT_COOLDOWN_SECONDS,
+            SESSION_CACHE_TTL_SECONDS, global_stats
+        )
+        
+        logger.info(f"[IMPORT] 账户导入成功: 新增 {added_count}, 更新 {updated_count}")
+        return {
+            "status": "success",
+            "message": f"导入成功: 新增 {added_count} 个, 更新 {updated_count} 个",
+            "added": added_count,
+            "updated": updated_count,
+            "total": len(multi_account_mgr.accounts)
+        }
+    except json.JSONDecodeError as e:
+        logger.error(f"[IMPORT] JSON 解析失败: {str(e)}")
+        raise HTTPException(400, f"JSON 解析失败: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[IMPORT] 导入失败: {str(e)}")
+        raise HTTPException(500, f"导入失败: {str(e)}")
+
+@app.post("/admin/accounts/upload-json")
+@require_login()
+async def admin_upload_accounts_json(request: Request, accounts: list = Body(...)):
+    """
+    通过请求体直接上传账户数据（用于脚本自动同步）
+    格式: [{"id": "email", "secure_c_ses": "...", ...}, ...]
+    """
+    global multi_account_mgr
+    
+    try:
+        # 验证必需字段
+        required_fields = ["id", "secure_c_ses", "csesidx", "config_id"]
+        for account in accounts:
+            missing = [f for f in required_fields if not account.get(f)]
+            if missing:
+                raise HTTPException(400, f"账户 {account.get('id', '未知')} 缺少必需字段: {', '.join(missing)}")
+        
+        # 读取现有配置
+        accounts_file = Path(DATA_DIR) / "accounts.json"
+        existing_accounts = []
+        if accounts_file.exists():
+            try:
+                async with aiofiles.open(accounts_file, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    existing_accounts = json.loads(content)
+            except Exception:
+                existing_accounts = []
+        
+        # 合并账户
+        existing_ids = {acc.get("id") for acc in existing_accounts}
+        updated_count = 0
+        added_count = 0
+        
+        for new_account in accounts:
+            account_id = new_account.get("id")
+            if account_id in existing_ids:
+                for i, acc in enumerate(existing_accounts):
+                    if acc.get("id") == account_id:
+                        existing_accounts[i] = new_account
+                        updated_count += 1
+                        break
+            else:
+                existing_accounts.append(new_account)
+                added_count += 1
+        
+        # 保存配置
+        async with aiofiles.open(accounts_file, 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(existing_accounts, indent=2, ensure_ascii=False))
+        
+        # 重新加载账户管理器
+        multi_account_mgr = load_multi_account_config(
+            http_client, USER_AGENT,
+            ACCOUNT_FAILURE_THRESHOLD, RATE_LIMIT_COOLDOWN_SECONDS,
+            SESSION_CACHE_TTL_SECONDS, global_stats
+        )
+        
+        logger.info(f"[IMPORT] 账户同步成功: 新增 {added_count}, 更新 {updated_count}")
+        return {
+            "status": "success",
+            "added": added_count,
+            "updated": updated_count,
+            "total": len(multi_account_mgr.accounts)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[IMPORT] 同步失败: {str(e)}")
+        raise HTTPException(500, f"同步失败: {str(e)}")
+
 # ---------- 登录刷新服务 API ----------
 @app.post("/admin/login/start")
 @require_login()
