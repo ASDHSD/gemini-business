@@ -1383,6 +1383,27 @@ if PATH_PREFIX:
     async def admin_reload_accounts_prefixed(request: Request):
         return await admin_reload_accounts(request=request)
 
+    # ---------- 带PATH_PREFIX的登录刷新服务API ----------
+    @app.post(f"/{PATH_PREFIX}/login/start")
+    @require_login()
+    async def admin_start_login_prefixed(request: Request, account_ids: List[str] = Body(...)):
+        return await admin_start_login(request=request, account_ids=account_ids)
+
+    @app.get(f"/{PATH_PREFIX}/login/task/{{task_id}}")
+    @require_login()
+    async def admin_get_login_task_prefixed(request: Request, task_id: str):
+        return await admin_get_login_task(request=request, task_id=task_id)
+
+    @app.get(f"/{PATH_PREFIX}/login/current")
+    @require_login()
+    async def admin_get_current_login_task_prefixed(request: Request):
+        return await admin_get_current_login_task(request=request)
+
+    @app.post(f"/{PATH_PREFIX}/login/check")
+    @require_login()
+    async def admin_check_and_refresh_prefixed(request: Request):
+        return await admin_check_and_refresh(request=request)
+
 # ---------- API端点（API Key认证） ----------
 
 @app.get("/v1/models")
