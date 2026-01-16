@@ -13,45 +13,55 @@
     </thead>
     <tbody>
         {% if accounts_data %}
-            {% for account in accounts_data %}
-            <tr style="opacity: {{ account.row_opacity }};">
-                <td data-label="账号ID">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span class="status-dot" style="background-color: {{ account.dot_color }};"></span>
-                        <span style="font-weight: 600;">{{ account.account_id }}</span>
-                    </div>
-                </td>
-                <td data-label="状态">
-                    <span style="color: {{ account.status_color }}; font-weight: 600; font-size: 12px;">{{ account.status_text }}</span>
-                </td>
-                <td data-label="过期时间">
-                    <span class="font-mono" style="font-size: 11px; color: #6b6b6b;">{{ account.expires_at or '未设置' }}</span>
-                </td>
-                <td data-label="剩余时长">
-                    <span style="color: {{ account.status_color }}; font-weight: 500; font-size: 12px;">{{ account.expire_display }}</span>
-                </td>
-                <td data-label="累计对话">
-                    <span style="color: #2563eb; font-weight: 600;">{{ account.conversation_count }}</span>
-                </td>
-                <td data-label="操作">
-                    <div style="display: flex; gap: 6px;">
-                        {% if account.is_expired %}
-                            <button onclick="deleteAccount('{{ account.account_id }}')" class="btn-sm btn-delete" title="删除">删除</button>
-                        {% elif account.is_disabled or account.is_permanently_failed %}
-                            <button onclick="enableAccount('{{ account.account_id }}')" class="btn-sm btn-enable" title="启用">启用</button>
-                            <button onclick="deleteAccount('{{ account.account_id }}')" class="btn-sm btn-delete" title="删除">删除</button>
-                        {% else %}
-                            <button onclick="disableAccount('{{ account.account_id }}')" class="btn-sm btn-disable" title="禁用">禁用</button>
-                            <button onclick="deleteAccount('{{ account.account_id }}')" class="btn-sm btn-delete" title="删除">删除</button>
-                        {% endif %}
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
+        {% for account in accounts_data %}
+        <tr style="opacity: {{ account.row_opacity }};">
+            <td data-label="账号ID">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="status-dot" style="background-color: {{ account.dot_color }};"></span>
+                    <span style="font-weight: 600;">{{ account.account_id }}</span>
+                </div>
+            </td>
+            <td data-label="状态">
+                <span style="color: {{ account.status_color }}; font-weight: 600; font-size: 12px;">{{
+                    account.status_text }}</span>
+            </td>
+            <td data-label="过期时间">
+                <span class="font-mono" style="font-size: 11px; color: #6b6b6b;">{{ account.expires_at or '未设置'
+                    }}</span>
+            </td>
+            <td data-label="剩余时长">
+                <span style="color: {{ account.status_color }}; font-weight: 500; font-size: 12px;">{{
+                    account.expire_display }}</span>
+            </td>
+            <td data-label="累计对话">
+                <span style="color: #2563eb; font-weight: 600;">{{ account.conversation_count }}</span>
+            </td>
+            <td data-label="操作">
+                <div style="display: flex; gap: 6px;">
+                    <button onclick="refreshAccount('{{ account.account_id }}')" class="btn-sm btn-refresh"
+                        title="刷新Cookie">🔄</button>
+                    {% if account.is_expired %}
+                    <button onclick="deleteAccount('{{ account.account_id }}')" class="btn-sm btn-delete"
+                        title="删除">删除</button>
+                    {% elif account.is_disabled or account.is_permanently_failed %}
+                    <button onclick="enableAccount('{{ account.account_id }}')" class="btn-sm btn-enable"
+                        title="启用">启用</button>
+                    <button onclick="deleteAccount('{{ account.account_id }}')" class="btn-sm btn-delete"
+                        title="删除">删除</button>
+                    {% else %}
+                    <button onclick="disableAccount('{{ account.account_id }}')" class="btn-sm btn-disable"
+                        title="禁用">禁用</button>
+                    <button onclick="deleteAccount('{{ account.account_id }}')" class="btn-sm btn-delete"
+                        title="删除">删除</button>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
         {% else %}
-            <tr>
-                <td colspan="6" style="text-align: center; color: #6b6b6b; padding: 24px;">暂无账户</td>
-            </tr>
+        <tr>
+            <td colspan="6" style="text-align: center; color: #6b6b6b; padding: 24px;">暂无账户</td>
+        </tr>
         {% endif %}
     </tbody>
 </table>

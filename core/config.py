@@ -35,6 +35,7 @@ class BasicConfig(BaseModel):
     mail_admin_key: str = Field(default="", description="临时邮箱管理员密钥")
     email_domain: list = Field(default=[], description="临时邮箱域名")
     register_number: int = Field(default=5, ge=1, le=100, description="注册临时邮箱数量")
+    yescaptcha_api_key: str = Field(default="", description="YesCaptcha API Key（仅刷新Cookie时使用）")
 
 
 
@@ -153,7 +154,8 @@ class ConfigManager:
             mail_api=basic_data.get("mail_api") or os.getenv("MAIL_API", ""),
             mail_admin_key=basic_data.get("mail_admin_key") or os.getenv("MAIL_ADMIN_KEY", ""),
             email_domain=email_domain_value,
-            register_number=basic_data.get("register_number") or int(os.getenv("REGISTER_NUMBER", 5))
+            register_number=basic_data.get("register_number") or int(os.getenv("REGISTER_NUMBER", 5)),
+            yescaptcha_api_key=basic_data.get("yescaptcha_api_key") or os.getenv("YESCAPTCHA_API_KEY", "")
         )
 
         # 4. 加载其他配置（从 YAML）

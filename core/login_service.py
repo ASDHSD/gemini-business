@@ -162,6 +162,77 @@ class LoginService:
         logger.info(f"✅ 配置已更新: {email}")
         return data
 
+    def _should_retry_with_captcha(self, result: dict) -> bool:
+        """判断是否应该使用打码重试"""
+        error = str(result.get("error", "")).lower()
+        captcha_errors = ["captcha", "验证码发送", "验证码超时", "couldn't send", "try again", "无法发送"]
+        return any(e in error for e in captcha_errors)
+
+    def _retry_with_captcha(self, driver, wait, email: str) -> Dict[str, Any]:
+        """使用打码服务重试验证流程"""
+        from selenium.webdriver.common.by import By
+        
+        try:
+            from util.captcha_service import get_captcha_service
+            captcha = get_captcha_service()
+            
+            if not captcha.is_enabled:
+                return {"success": False, "error": "YesCaptcha 未配置"}
+            
+            # 获取新的 reCAPTCHA token
+            token = captcha.get_recaptcha_token()
+            if not token:
+                return {"success": False, "error": "获取打码 Token 失败"}
+            
+            logger.info(f"🔄 [{email}] 获取到打码 Token，尝试点击重新发送...")
+            
+            # 查找并点击重新发送按钮
+            resend_keywords = ["resend", "重新发送", "try again", "send again", "重新获取"]
+            clicked = False
+            
+            try:
+                buttons = driver.find_elements(By.TAG_NAME, "button")
+                for btn in buttons:
+                    try:
+                        btn_text = (btn.text or "").lower()
+                        if any(kw in btn_text for kw in resend_keywords):
+                            driver.execute_script("arguments[0].click();", btn)
+                            clicked = True
+                            logger.info(f"✅ [{email}] 点击重新发送按钮成功")
+                            break
+                    except Exception:
+                        continue
+            except Exception as e:
+                logger.warning(f"⚠️ [{email}] 查找重发按钮失败: {e}")
+            
+            if not clicked:
+                return {"success": False, "error": "未找到重新发送按钮"}
+            
+            # 等待并重新执行验证流程
+            time.sleep(3)
+            
+            # 获取新验证码并继续验证
+            code = self.auth_helper.get_verification_code(email, timeout=60)
+            if not code:
+                return {"success": False, "error": "打码重试后验证码超时"}
+            
+            # 输入验证码
+            time.sleep(0.5)
+            self.auth_helper.disable_resend_buttons(driver)
+            if not self.auth_helper.fill_verification_code(driver, wait, code):
+                return {"success": False, "error": "验证码输入失败"}
+            
+            # 点击验证按钮
+            time.sleep(0.4)
+            self.auth_helper.click_verify_only(driver, timeout=3)
+            
+            logger.info(f"✅ [{email}] 打码重试验证完成")
+            return {"success": True, "error": None}
+            
+        except Exception as e:
+            logger.error(f"🔴 [{email}] 打码重试异常: {e}")
+            return {"success": False, "error": str(e)}
+
     def _login_one_sync_inner(self, email: str) -> Dict[str, Any]:
         """
         同步执行单次登录刷新（内部方法，会被超时包装）
@@ -203,6 +274,17 @@ class LoginService:
 
             # 2-6. 执行邮箱验证流程（使用公共方法）
             verify_result = self.auth_helper.perform_email_verification(driver, wait, email)
+            
+            # 如果验证失败，尝试打码重试
+            if not verify_result["success"]:
+                if self._should_retry_with_captcha(verify_result):
+                    logger.warning(f"⚠️ [{email}] 验证失败，尝试打码重试...")
+                    retry_result = self._retry_with_captcha(driver, wait, email)
+                    if retry_result["success"]:
+                        verify_result = retry_result
+                    else:
+                        logger.error(f"🔴 [{email}] 打码重试失败: {retry_result.get('error')}")
+            
             if not verify_result["success"]:
                 logger.error(f"🔴 [VERIFY_FAIL] {email} 验证失败: {verify_result['error']}")
                 return {"email": email, "success": False, "config": None, "error": verify_result["error"]}
