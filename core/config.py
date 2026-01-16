@@ -19,8 +19,8 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, validator
 from dotenv import load_dotenv
 
-# 加载 .env 文件
-load_dotenv()
+# 加载 .env 文件（优先加载容器内的 /app/.env）
+load_dotenv("/app/.env", override=True)
 
 
 # ==================== 配置模型定义 ====================
